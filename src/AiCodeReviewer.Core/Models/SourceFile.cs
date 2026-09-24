@@ -1,3 +1,3 @@
 namespace AiCodeReviewer.Core.Models;
 
-public sealed record SourceFile(string Path, string Name, string Content);
+public sealed record SourceFile(string Path, string Name, string Content, LanguageProfile Language);

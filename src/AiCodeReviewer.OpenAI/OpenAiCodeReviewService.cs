@@ -10,7 +10,7 @@ using AiCodeReviewer.Core.Services;
 
 namespace AiCodeReviewer.OpenAI;
 
-public sealed class OpenAiCodeReviewService : ICodeReviewService
+public sealed class OpenAiCodeReviewService : IRetrievalAwareCodeReviewService, ISpecialistCodeReviewService
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
@@ -25,10 +25,32 @@ public sealed class OpenAiCodeReviewService : ICodeReviewService
         _options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
-    public async Task<CodeReviewResult> ReviewAsync(SourceFile sourceFile, CancellationToken cancellationToken = default)
+    public Task<CodeReviewResult> ReviewAsync(SourceFile sourceFile, CancellationToken cancellationToken = default) =>
+        ReviewCoreAsync(sourceFile, null, null, cancellationToken);
+
+    public Task<CodeReviewResult> ReviewWithContextAsync(
+        SourceFile sourceFile,
+        IReadOnlyList<CodeChunk> relatedContext,
+        CancellationToken cancellationToken = default) =>
+        ReviewCoreAsync(sourceFile, relatedContext, null, cancellationToken);
+
+    public Task<CodeReviewResult> ReviewAsSpecialistAsync(
+        SourceFile sourceFile,
+        SpecialistProfile specialist,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(specialist);
+        return ReviewCoreAsync(sourceFile, null, specialist.Guidance, cancellationToken);
+    }
+
+    private async Task<CodeReviewResult> ReviewCoreAsync(
+        SourceFile sourceFile,
+        IReadOnlyList<CodeChunk>? relatedContext,
+        string? specialistGuidance,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sourceFile);
-        var prompt = ReviewPromptFactory.Create(sourceFile);
+        var prompt = ReviewPromptFactory.Create(sourceFile, relatedContext, specialistGuidance);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(_options.BaseUri, "responses"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey);
@@ -92,11 +114,12 @@ public sealed class OpenAiCodeReviewService : ICodeReviewService
                 {
                     type = "object",
                     additionalProperties = false,
-                    required = new[] { "severity", "category", "explanation", "location", "suggestedImprovement" },
+                    required = new[] { "severity", "category", "file", "explanation", "location", "suggestedImprovement" },
                     properties = new
                     {
                         severity = new { type = "string", @enum = EnumNames<ReviewSeverity>() },
                         category = new { type = "string", @enum = EnumNames<ReviewCategory>() },
+                        file = new { type = "string" },
                         explanation = new { type = "string" },
                         location = new { type = new[] { "string", "null" } },
                         suggestedImprovement = new { type = "string" }

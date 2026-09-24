@@ -1,5 +1,6 @@
 using System.Text;
 using AiCodeReviewer.Core.Exceptions;
+using AiCodeReviewer.Core.Models;
 using AiCodeReviewer.Core.Services;
 
 namespace AiCodeReviewer.Tests;
@@ -18,6 +19,7 @@ public sealed class SourceFileLoaderTests : IDisposable
         Assert.Equal(Path.GetFullPath(path), sourceFile.Path);
         Assert.Equal("Example.cs", sourceFile.Name);
         Assert.Contains("class Example", sourceFile.Content);
+        Assert.Equal(ProgrammingLanguage.CSharp, sourceFile.Language.Language);
     }
 
     [Fact]
@@ -25,7 +27,7 @@ public sealed class SourceFileLoaderTests : IDisposable
     {
         var path = CreateFile("Example.txt", "text");
         var exception = await Assert.ThrowsAsync<SourceFileException>(() => new SourceFileLoader().LoadAsync(path));
-        Assert.Contains(".cs extension", exception.Message);
+        Assert.Contains("does not support", exception.Message);
     }
 
     [Fact]

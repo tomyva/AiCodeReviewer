@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\AiCodeReviewer.Core\AiCodeReviewer.Core.csproj" />
+    <ProjectReference Include="..\..\src\AiCodeReviewer.GitHub\AiCodeReviewer.GitHub.csproj" />
   </ItemGroup>
 
 </Project>

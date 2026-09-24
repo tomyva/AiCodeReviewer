@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/AiCodeReviewer.Cli/AiCodeReviewer.Cli.csproj" />
     <Project Path="src/AiCodeReviewer.Core/AiCodeReviewer.Core.csproj" />
+    <Project Path="src/AiCodeReviewer.GitHub/AiCodeReviewer.GitHub.csproj" />
     <Project Path="src/AiCodeReviewer.OpenAI/AiCodeReviewer.OpenAI.csproj" />
   </Folder>
   <Folder Name="/tests/">

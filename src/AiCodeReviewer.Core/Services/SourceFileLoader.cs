@@ -9,11 +9,15 @@ public sealed class SourceFileLoader : ISourceFileLoader
 {
     public const long DefaultMaximumFileSizeBytes = 512 * 1024;
     private readonly long _maximumFileSizeBytes;
+    private readonly ILanguageDetector _languageDetector;
 
-    public SourceFileLoader(long maximumFileSizeBytes = DefaultMaximumFileSizeBytes)
+    public SourceFileLoader(
+        long maximumFileSizeBytes = DefaultMaximumFileSizeBytes,
+        ILanguageDetector? languageDetector = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumFileSizeBytes);
         _maximumFileSizeBytes = maximumFileSizeBytes;
+        _languageDetector = languageDetector ?? new LanguageDetector();
     }
 
     public async Task<SourceFile> LoadAsync(string path, CancellationToken cancellationToken = default)
@@ -33,10 +37,7 @@ public sealed class SourceFileLoader : ISourceFileLoader
             throw new SourceFileException("The source file path is invalid.", exception);
         }
 
-        if (!string.Equals(Path.GetExtension(fullPath), ".cs", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new SourceFileException("Version 1 accepts C# source files with the .cs extension only.");
-        }
+        var language = _languageDetector.Detect(fullPath);
 
         if (!File.Exists(fullPath))
         {
@@ -63,7 +64,7 @@ public sealed class SourceFileLoader : ISourceFileLoader
                 throw new SourceFileException("The source file contains no reviewable code.");
             }
 
-            return new SourceFile(fullPath, Path.GetFileName(fullPath), content);
+            return new SourceFile(fullPath, Path.GetFileName(fullPath), content, language);
         }
         catch (DecoderFallbackException exception)
         {

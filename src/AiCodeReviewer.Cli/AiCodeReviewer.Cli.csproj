@@ -1,9 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\AiCodeReviewer.Core\AiCodeReviewer.Core.csproj" />
-    <ProjectReference Include="..\AiCodeReviewer.OpenAI\AiCodeReviewer.OpenAI.csproj" />
-    <ProjectReference Include="..\AiCodeReviewer.GitHub\AiCodeReviewer.GitHub.csproj" />
+    <ProjectReference Include="..\AiCodeReviewer.Application\AiCodeReviewer.Application.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

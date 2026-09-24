@@ -1,11 +1,15 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/AiCodeReviewer.Application/AiCodeReviewer.Application.csproj" />
+    <Project Path="src/AiCodeReviewer.Blazor/AiCodeReviewer.Blazor.csproj" />
     <Project Path="src/AiCodeReviewer.Cli/AiCodeReviewer.Cli.csproj" />
     <Project Path="src/AiCodeReviewer.Core/AiCodeReviewer.Core.csproj" />
     <Project Path="src/AiCodeReviewer.GitHub/AiCodeReviewer.GitHub.csproj" />
     <Project Path="src/AiCodeReviewer.OpenAI/AiCodeReviewer.OpenAI.csproj" />
+    <Project Path="src/AiCodeReviewer.Wpf/AiCodeReviewer.Wpf.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AiCodeReviewer.Tests/AiCodeReviewer.Tests.csproj" />
+    <Project Path="tests/AiCodeReviewer.Wpf.Tests/AiCodeReviewer.Wpf.Tests.csproj" />
   </Folder>
 </Solution>

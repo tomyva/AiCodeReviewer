@@ -1,0 +1,234 @@
+@page "/"
+@implements IDisposable
+@using AiCodeReviewer.Application
+@using AiCodeReviewer.Blazor.Services
+@inject ReviewPageModel Model
+
+<PageTitle>AI Code Reviewer</PageTitle>
+
+<header class="review-hero">
+    <p class="eyebrow">AI-assisted engineering</p>
+    <h1>Review code with context</h1>
+    <p>Choose a workflow, provide its source, then inspect structured findings before taking action.</p>
+</header>
+
+<div class="review-grid">
+    <section class="panel" aria-labelledby="setup-heading">
+        <h2 id="setup-heading">Review setup</h2>
+
+        <label for="review-mode">Review mode</label>
+        <select id="review-mode" class="form-select" @bind="Model.Mode" disabled="@Model.IsBusy">
+            @foreach (var mode in Enum.GetValues<ReviewMode>())
+            {
+                <option value="@mode">@ModeName(mode)</option>
+            }
+        </select>
+
+        @if (Model.UsesPath)
+        {
+            <label for="source-path">@Model.PathLabel</label>
+            <input id="source-path" class="form-control" @bind="Model.Path" placeholder="C:\projects\sample" disabled="@Model.IsBusy" />
+            <p class="field-help">The web app runs on the server. Enter a path that the server can access.</p>
+        }
+
+        @if (Model.UsesRemoteUrl)
+        {
+            <label for="remote-url">Remote HTTPS Git URL</label>
+            <input id="remote-url" class="form-control" @bind="Model.RemoteUrl" placeholder="https://github.com/owner/repository.git" disabled="@Model.IsBusy" />
+            <p class="field-help">Credentials must not be included in the URL.</p>
+        }
+
+        @if (Model.UsesPullRequest)
+        {
+            <div class="form-row">
+                <div>
+                    <label for="github-owner">GitHub owner</label>
+                    <input id="github-owner" class="form-control" @bind="Model.GitHubOwner" disabled="@Model.IsBusy" />
+                </div>
+                <div>
+                    <label for="github-repo">Repository</label>
+                    <input id="github-repo" class="form-control" @bind="Model.GitHubRepository" disabled="@Model.IsBusy" />
+                </div>
+                <div>
+                    <label for="pr-number">Pull request</label>
+                    <input id="pr-number" type="number" min="1" class="form-control" @bind="Model.PullRequestNumber" disabled="@Model.IsBusy" />
+                </div>
+            </div>
+            <p class="field-help">Pull-request review is always a dry run first. Publishing requires a separate confirmation.</p>
+        }
+
+        @if (Model.UsesRepositoryLimits)
+        {
+            <div class="form-row">
+                <div>
+                    <label for="max-files">Maximum files</label>
+                    <input id="max-files" type="number" min="1" class="form-control" @bind="Model.MaximumFiles" disabled="@Model.IsBusy" />
+                </div>
+                <div>
+                    <label for="max-characters">Maximum characters</label>
+                    <input id="max-characters" type="number" min="1" class="form-control" @bind="Model.MaximumCharacters" disabled="@Model.IsBusy" />
+                </div>
+            </div>
+        }
+
+        <div class="actions">
+            <button class="btn btn-primary" @onclick="StartAsync" disabled="@Model.IsBusy">Start review</button>
+            <button class="btn btn-outline-secondary" @onclick="Model.Cancel" disabled="@(!Model.IsBusy)">Cancel</button>
+        </div>
+    </section>
+
+    <aside class="panel status-panel" aria-labelledby="config-heading">
+        <h2 id="config-heading">Configuration</h2>
+        <p class="status-line"><span class="status-symbol" aria-hidden="true">@(Model.Configuration.OpenAiApiKeyConfigured ? "✓" : "!")</span> OpenAI key: @(Model.Configuration.OpenAiApiKeyConfigured ? "configured" : "missing")</p>
+        <p class="status-line"><span class="status-symbol" aria-hidden="true">@(Model.Configuration.OpenAiModelConfigured ? "✓" : "!")</span> Model: @Model.Configuration.OpenAiModel</p>
+        <p class="status-line"><span class="status-symbol" aria-hidden="true">@(Model.Configuration.GitHubTokenConfigured ? "✓" : "–")</span> GitHub publishing: @(Model.Configuration.GitHubTokenConfigured ? "available" : "not configured")</p>
+        <p class="field-help">Credentials are read from environment variables and are never displayed or editable here.</p>
+
+        <h2>Preferences</h2>
+        <label for="export-format">Default export</label>
+        <select id="export-format" class="form-select" @bind="Model.PreferredExportFormat">
+            @foreach (var format in Enum.GetValues<ExportFormat>()) { <option value="@format">@format</option> }
+        </select>
+        <label for="theme">Theme</label>
+        <select id="theme" class="form-select" @bind="Model.Theme">
+            @foreach (var theme in Enum.GetValues<AppTheme>()) { <option value="@theme">@theme</option> }
+        </select>
+        <button class="btn btn-outline-secondary" @onclick="Model.SavePreferences">Save preferences</button>
+
+        @if (Model.RecentReviews.Count > 0)
+        {
+            <h2>Recent reviews</h2>
+            <ul class="recent-list">
+                @foreach (var recent in Model.RecentReviews.Take(5))
+                {
+                    <li><strong>@recent.Mode</strong><br /><span>@recent.FindingCount findings · @recent.CompletedAt.ToLocalTime().ToString("g")</span></li>
+                }
+            </ul>
+        }
+
+        <h2>Progress</h2>
+        <div class="progress" role="progressbar" aria-label="Review progress" aria-valuenow="@Model.ProgressPercent" aria-valuemin="0" aria-valuemax="100">
+            <div class="progress-bar" style="width: @(Model.ProgressPercent)%"></div>
+        </div>
+        <p aria-live="polite">@Model.Status</p>
+    </aside>
+</div>
+
+@if (Model.Error is not null)
+{
+    <div class="alert alert-danger" role="alert"><strong>@Model.Error.Code:</strong> @Model.Error.Message</div>
+}
+
+@if (Model.Report is not null)
+{
+    <section class="panel results" aria-labelledby="results-heading">
+        <div class="results-heading">
+            <div>
+                <p class="eyebrow">@Model.Report.Mode · @Model.Report.Model</p>
+                <h2 id="results-heading">@Model.FilteredFindings.Count of @Model.Report.Findings.Count findings</h2>
+                <p>@Model.Report.Subject</p>
+            </div>
+            <div class="actions">
+                <a class="btn btn-outline-primary" href="@Model.JsonDownloadUrl" download="ai-code-review.json">Download JSON</a>
+                <a class="btn btn-outline-primary" href="@Model.MarkdownDownloadUrl" download="ai-code-review.md">Download Markdown</a>
+            </div>
+        </div>
+
+        @if (Model.Report.Usage is not null)
+        {
+            <p class="usage">Tokens — input: @(Model.Report.Usage.InputTokens?.ToString("N0") ?? "unavailable"), output: @(Model.Report.Usage.OutputTokens?.ToString("N0") ?? "unavailable"), total: @(Model.Report.Usage.TotalTokens?.ToString("N0") ?? "unavailable")</p>
+        }
+
+        <div class="filter-bar" aria-label="Finding filters">
+            <div><label for="finding-search">Search</label><input id="finding-search" class="form-control" @bind="Model.SearchText" @bind:event="oninput" /></div>
+            <div><label for="severity-filter">Severity</label><select id="severity-filter" class="form-select" @bind="Model.SeverityFilter"><option value="">All severities</option>@foreach (var severity in Enum.GetValues<AiCodeReviewer.Core.Models.ReviewSeverity>()) { <option value="@severity">@severity</option> }</select></div>
+            <div><label for="finding-sort">Sort</label><select id="finding-sort" class="form-select" @bind="Model.FindingSort">@foreach (var sort in Enum.GetValues<FindingSort>()) { <option value="@sort">@sort</option> }</select></div>
+        </div>
+
+        @if (Model.Report.Findings.Count == 0)
+        {
+            <p>No actionable findings were returned.</p>
+        }
+        else
+        {
+            <div class="findings-list">
+                @foreach (var finding in Model.VisibleFindings)
+                {
+                    <article class="finding severity-@finding.Severity.ToString().ToLowerInvariant()">
+                        <div class="finding-title"><span class="severity-label">@finding.Severity</span><strong>@finding.Category</strong></div>
+                        <p class="finding-location">@finding.File · @(finding.Location ?? "Location not specified")</p>
+                        <p>@finding.Explanation</p>
+                        <p><strong>Suggested improvement:</strong> @finding.SuggestedImprovement</p>
+                    </article>
+                }
+            </div>
+            @if (Model.HasHiddenFindings)
+            {
+                <p class="field-help">Showing the first 200 matching findings. Narrow the search or export the complete report.</p>
+            }
+        }
+
+        @if (Model.Report.PublicationDraft is not null)
+        {
+            <div class="publish-box">
+                <h3>GitHub draft comments (@Model.Report.PublicationDraft.Comments.Count)</h3>
+                <p>Nothing has been published. Inspect every finding before approving.</p>
+                <label class="confirm-row"><input type="checkbox" @bind="Model.IsConfirmingPublish" /> I reviewed these drafts and approve publishing them now.</label>
+                <button class="btn btn-danger" @onclick="PublishAsync" disabled="@(Model.IsBusy || !Model.IsConfirmingPublish)">Publish approved comments</button>
+            </div>
+        }
+
+        @if (Model.Report.Statistics is not null)
+        {
+            <details><summary>Repository statistics</summary>
+                <ul>
+                    <li>Files discovered: @Model.Report.Statistics.FilesDiscovered</li>
+                    <li>Files reviewed: @Model.Report.Statistics.FilesReviewed</li>
+                    <li>Files skipped: @Model.Report.Statistics.FilesSkipped</li>
+                    <li>Files failed: @Model.Report.Statistics.FilesFailed</li>
+                    <li>Characters reviewed: @Model.Report.Statistics.CharactersReviewed</li>
+                </ul>
+            </details>
+        }
+
+        @if (Model.Report.Investigation.Count > 0)
+        {
+            <details><summary>Agent activity (@Model.Report.Investigation.Count steps)</summary>
+                <ol>
+                    @foreach (var step in Model.Report.Investigation)
+                    {
+                        <li><strong>@step.Tool</strong> @step.Arguments — @step.OutputCharacters characters</li>
+                    }
+                </ol>
+            </details>
+        }
+    </section>
+}
+
+@code {
+    protected override void OnInitialized() => Model.Changed += HandleChanged;
+
+    private async Task StartAsync() => await Model.StartAsync();
+
+    private async Task PublishAsync() => await Model.PublishAsync();
+
+    private void HandleChanged(object? sender, EventArgs args) => _ = InvokeAsync(StateHasChanged);
+
+    private static string ModeName(ReviewMode mode) => mode switch
+    {
+        ReviewMode.File => "Single source file",
+        ReviewMode.LocalRepository => "Local repository",
+        ReviewMode.RemoteRepository => "Remote Git repository",
+        ReviewMode.RagRepository => "Repository with semantic context",
+        ReviewMode.AgentRepository => "Agent-guided repository review",
+        ReviewMode.GitHubPullRequest => "GitHub pull request",
+        ReviewMode.Specialists => "Specialist review team",
+        _ => mode.ToString()
+    };
+
+    public void Dispose()
+    {
+        Model.Changed -= HandleChanged;
+        Model.Dispose();
+    }
+}
